@@ -1,0 +1,654 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cube State Viewer</title>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --panel: #ffffff;
+    --text: #1d2330;
+    --muted: #667085;
+    --border: #d8dce3;
+    --accent: #2f6fed;
+    --accent-text: #ffffff;
+    --btn: #eef0f4;
+    --btn-hover: #e2e6ed;
+    --ok: #13854e;
+    --warn: #b54708;
+    --stage: #e9ecf1;
+    --cubie: #15171c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12141a;
+      --panel: #1b1e26;
+      --text: #e6e8ee;
+      --muted: #98a1b3;
+      --border: #2d323e;
+      --accent: #5b8cff;
+      --accent-text: #0b1020;
+      --btn: #252a35;
+      --btn-hover: #2f3542;
+      --ok: #3ccf8e;
+      --warn: #f5a35c;
+      --stage: #171a21;
+      --cubie: #0a0b0e;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12141a;
+    --panel: #1b1e26;
+    --text: #e6e8ee;
+    --muted: #98a1b3;
+    --border: #2d323e;
+    --accent: #5b8cff;
+    --accent-text: #0b1020;
+    --btn: #252a35;
+    --btn-hover: #2f3542;
+    --ok: #3ccf8e;
+    --warn: #f5a35c;
+    --stage: #171a21;
+    --cubie: #0a0b0e;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    padding: 14px 16px 6px; max-width: 1280px; margin: 0 auto;
+  }
+  header h1 { font-size: 18px; margin: 0; font-weight: 650; }
+  header .sub { color: var(--muted); font-size: 13px; }
+  main {
+    display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px;
+    padding: 8px 16px 24px; max-width: 1280px; margin: 0 auto;
+  }
+  @media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); } }
+  .stage {
+    position: relative; background: var(--stage); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; min-height: 420px; height: min(72vh, 680px);
+    touch-action: none; cursor: grab;
+  }
+  .stage:active { cursor: grabbing; }
+  .stage canvas { display: block; width: 100%; height: 100%; }
+  .stage .hint {
+    position: absolute; left: 12px; bottom: 10px; color: var(--muted); font-size: 12px;
+    pointer-events: none;
+  }
+  .stage .status {
+    position: absolute; right: 12px; top: 10px; font-weight: 600; font-size: 13px;
+    padding: 3px 10px; border-radius: 999px; background: var(--panel); border: 1px solid var(--border);
+  }
+  .status.solved { color: var(--ok); }
+  .status.scrambled { color: var(--warn); }
+  .panel { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px;
+  }
+  .card h2 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+    margin: 0 0 8px; font-weight: 600;
+  }
+  .moves { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+  button {
+    font: inherit; color: var(--text); background: var(--btn); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 8px; cursor: pointer; min-height: 34px;
+  }
+  button:hover { background: var(--btn-hover); }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: transparent; font-weight: 600; }
+  button.primary:hover { filter: brightness(1.08); }
+  button:disabled { opacity: .5; cursor: default; }
+  .moves button { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-weight: 600; padding: 6px 0; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .row > * { flex: 1 1 auto; }
+  input[type="text"], input[type="number"], textarea {
+    font: 13px ui-monospace, "Cascadia Code", Consolas, monospace; color: var(--text);
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 7px 8px;
+    width: 100%; min-width: 0;
+  }
+  input[type="number"] { width: 72px; flex: 0 0 auto; }
+  textarea { resize: vertical; min-height: 54px; word-break: break-all; }
+  label { color: var(--muted); font-size: 12px; }
+  .stats { display: flex; gap: 16px; margin-bottom: 6px; }
+  .stat b { font-size: 20px; display: block; font-variant-numeric: tabular-nums; }
+  .stat span { color: var(--muted); font-size: 12px; }
+  .history {
+    font: 13px ui-monospace, "Cascadia Code", Consolas, monospace; color: var(--text);
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 7px 8px;
+    min-height: 34px; max-height: 96px; overflow-y: auto; word-break: break-word;
+  }
+  .history .empty { color: var(--muted); font-family: system-ui, sans-serif; }
+  .net { display: grid; grid-template-columns: repeat(12, 1fr); gap: 2px; max-width: 100%; }
+  .net .cell { aspect-ratio: 1; border-radius: 2px; }
+  .net .sticker { border: 1px solid rgba(0,0,0,.35); }
+  .msg { font-size: 12px; min-height: 16px; color: var(--muted); margin-top: 6px; }
+  .msg.err { color: var(--warn); }
+  kbd {
+    font: 11px ui-monospace, Consolas, monospace; background: var(--btn); border: 1px solid var(--border);
+    border-bottom-width: 2px; border-radius: 4px; padding: 0 4px;
+  }
+  .slider { display: flex; align-items: center; gap: 8px; }
+  .slider input { flex: 1; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Cube State Viewer</h1>
+  <span class="sub">3×3 · HTM · Kociemba facelet order URFDLB</span>
+</header>
+<main>
+  <section class="stage" id="stage">
+    <div class="status solved" id="status">Solved</div>
+    <div class="hint">Drag to orbit · scroll to zoom · keys <kbd>U</kbd><kbd>R</kbd><kbd>F</kbd><kbd>D</kbd><kbd>L</kbd><kbd>B</kbd>, <kbd>Shift</kbd> = prime, <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo</div>
+  </section>
+
+  <aside class="panel">
+    <div class="card">
+      <h2>Moves</h2>
+      <div class="moves" id="moveButtons"></div>
+      <div class="slider" style="margin-top:10px">
+        <label for="speed">Speed</label>
+        <input type="range" id="speed" min="40" max="700" value="220">
+        <label id="speedLabel">220 ms</label>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Sequence</h2>
+      <div class="stats">
+        <div class="stat"><b id="moveCount">0</b><span>moves (HTM)</span></div>
+        <div class="stat"><b id="qtmCount">0</b><span>moves (QTM)</span></div>
+      </div>
+      <div class="history" id="history"><span class="empty">No moves yet</span></div>
+      <div class="row" style="margin-top:8px">
+        <button id="undoBtn">Undo</button>
+        <button id="rewindBtn">Rewind all</button>
+        <button id="resetBtn">Reset</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <input type="number" id="scrambleLen" min="1" max="200" value="20" aria-label="Scramble length">
+        <button class="primary" id="scrambleBtn">Random scramble</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Play algorithm</h2>
+      <div class="row">
+        <input type="text" id="algInput" placeholder="e.g. R U R' U' or a solver output">
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button class="primary" id="playBtn">Play</button>
+        <button id="playInvBtn">Play inverse</button>
+      </div>
+      <div class="msg" id="algMsg"></div>
+    </div>
+
+    <div class="card">
+      <h2>State (54 facelets)</h2>
+      <textarea id="stateBox" spellcheck="false" aria-label="Facelet state string"></textarea>
+      <div class="row" style="margin-top:6px">
+        <button id="loadStateBtn">Load state</button>
+        <button id="copyStateBtn">Copy</button>
+      </div>
+      <div class="msg" id="stateMsg"></div>
+    </div>
+
+    <div class="card">
+      <h2>Net</h2>
+      <div class="net" id="net"></div>
+    </div>
+  </aside>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+// ---------------------------------------------------------------------------
+// Conventions (shared with the Python env):
+//   axes: x → R, y → U, z → F (right-handed)
+//   facelet string: faces in order U R F D L B, 9 stickers each, row-major
+//   as seen looking straight at that face (Kociemba / cube-explorer layout).
+//   Colours: U white, R red, F green, D yellow, L orange, B blue.
+// ---------------------------------------------------------------------------
+const FACES = ["U", "R", "F", "D", "L", "B"];
+const COLORS = { U: "#f4f4f4", R: "#c8102e", F: "#009b48", D: "#ffd500", L: "#ff5800", B: "#0046ad" };
+const SOLVED = FACES.map(f => f.repeat(9)).join("");
+const OPPOSITE = { U: "D", D: "U", R: "L", L: "R", F: "B", B: "F" };
+// axis + sign of each face's outward normal
+const FACE_AXIS = { U: ["y", 1], D: ["y", -1], R: ["x", 1], L: ["x", -1], F: ["z", 1], B: ["z", -1] };
+
+function faceletIndex(face, x, y, z) {
+  let row, col;
+  switch (face) {
+    case "U": row = z + 1; col = x + 1; break;
+    case "R": row = 1 - y; col = 1 - z; break;
+    case "F": row = 1 - y; col = x + 1; break;
+    case "D": row = 1 - z; col = x + 1; break;
+    case "L": row = 1 - y; col = z + 1; break;
+    case "B": row = 1 - y; col = 1 - x; break;
+  }
+  return FACES.indexOf(face) * 9 + row * 3 + col;
+}
+
+function faceFromNormal(n) {
+  const ax = Math.abs(n.x), ay = Math.abs(n.y), az = Math.abs(n.z);
+  if (ax > ay && ax > az) return n.x > 0 ? "R" : "L";
+  if (ay > az) return n.y > 0 ? "U" : "D";
+  return n.z > 0 ? "F" : "B";
+}
+
+// ---------------------------------------------------------------- move parsing
+const MOVE_RE = /^([URFDLB])(2'|2|'|’)?$/;
+function parseAlg(text) {
+  const tokens = text.replace(/[(),]/g, " ").trim().split(/\s+/).filter(Boolean);
+  const moves = [];
+  for (const t of tokens) {
+    const m = MOVE_RE.exec(t);
+    if (!m) throw new Error(`Unrecognised move "${t}"`);
+    const suf = m[2] === "2'" ? "2" : (m[2] === "’" ? "'" : (m[2] || ""));
+    moves.push(m[1] + suf);
+  }
+  return moves;
+}
+function invertMove(m) {
+  if (m.endsWith("2")) return m;
+  return m.endsWith("'") ? m[0] : m + "'";
+}
+function invertAlg(moves) { return moves.slice().reverse().map(invertMove); }
+const qtmCost = m => (m.endsWith("2") ? 2 : 1);
+
+// ---------------------------------------------------------------- three.js scene
+const stage = document.getElementById("stage");
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+const keyLight = new THREE.DirectionalLight(0xffffff, 0.45);
+keyLight.position.set(4, 8, 6);
+scene.add(keyLight);
+const fillLight = new THREE.DirectionalLight(0xffffff, 0.2);
+fillLight.position.set(-6, -3, -4);
+scene.add(fillLight);
+
+const root = new THREE.Group();
+scene.add(root);
+
+const cubieColor = getComputedStyle(document.documentElement).getPropertyValue("--cubie").trim() || "#111";
+const bodyGeom = new THREE.BoxGeometry(0.97, 0.97, 0.97);
+const bodyMat = new THREE.MeshLambertMaterial({ color: cubieColor });
+const stickerGeom = roundedSquare(0.82, 0.12);
+
+function roundedSquare(size, r) {
+  const s = size / 2, shape = new THREE.Shape();
+  shape.moveTo(-s + r, -s);
+  shape.lineTo(s - r, -s); shape.quadraticCurveTo(s, -s, s, -s + r);
+  shape.lineTo(s, s - r); shape.quadraticCurveTo(s, s, s - r, s);
+  shape.lineTo(-s + r, s); shape.quadraticCurveTo(-s, s, -s, s - r);
+  shape.lineTo(-s, -s + r); shape.quadraticCurveTo(-s, -s, -s + r, -s);
+  return new THREE.ShapeGeometry(shape, 4);
+}
+
+const cubies = [];
+const stickers = [];
+const STICKER_OFFSET = 0.487;
+
+for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) for (let z = -1; z <= 1; z++) {
+  if (x === 0 && y === 0 && z === 0) continue;
+  const cubie = new THREE.Group();
+  cubie.position.set(x, y, z);
+  cubie.userData.home = new THREE.Vector3(x, y, z);
+  cubie.add(new THREE.Mesh(bodyGeom, bodyMat));
+  const faces = [];
+  if (y === 1) faces.push(["U", 0, 1, 0]);
+  if (y === -1) faces.push(["D", 0, -1, 0]);
+  if (x === 1) faces.push(["R", 1, 0, 0]);
+  if (x === -1) faces.push(["L", -1, 0, 0]);
+  if (z === 1) faces.push(["F", 0, 0, 1]);
+  if (z === -1) faces.push(["B", 0, 0, -1]);
+  for (const [face, nx, ny, nz] of faces) {
+    const mat = new THREE.MeshLambertMaterial({ color: COLORS[face], side: THREE.FrontSide });
+    const st = new THREE.Mesh(stickerGeom, mat);
+    st.position.set(nx * STICKER_OFFSET, ny * STICKER_OFFSET, nz * STICKER_OFFSET);
+    st.lookAt(nx * 10, ny * 10, nz * 10); // plane normal (+z local) points outward
+    st.userData.color = face;
+    st.userData.homeIndex = faceletIndex(face, x, y, z);
+    cubie.add(st);
+    stickers.push(st);
+  }
+  root.add(cubie);
+  cubies.push(cubie);
+}
+
+// ---------------------------------------------------------------- camera orbit
+const orbit = { theta: -0.62, phi: 1.02, radius: 9.5 };
+function updateCamera() {
+  const { theta, phi, radius } = orbit;
+  camera.position.set(
+    radius * Math.sin(phi) * Math.sin(-theta),
+    radius * Math.cos(phi),
+    radius * Math.sin(phi) * Math.cos(theta)
+  );
+  camera.lookAt(0, 0, 0);
+}
+updateCamera();
+
+let drag = null;
+stage.addEventListener("pointerdown", e => {
+  drag = { x: e.clientX, y: e.clientY };
+  stage.setPointerCapture(e.pointerId);
+});
+stage.addEventListener("pointermove", e => {
+  if (!drag) return;
+  orbit.theta += (e.clientX - drag.x) * 0.008;
+  orbit.phi = Math.min(Math.PI - 0.15, Math.max(0.15, orbit.phi - (e.clientY - drag.y) * 0.008));
+  drag = { x: e.clientX, y: e.clientY };
+  updateCamera();
+});
+stage.addEventListener("pointerup", () => { drag = null; });
+stage.addEventListener("pointercancel", () => { drag = null; });
+stage.addEventListener("wheel", e => {
+  e.preventDefault();
+  orbit.radius = Math.min(20, Math.max(6, orbit.radius * (1 + Math.sign(e.deltaY) * 0.08)));
+  updateCamera();
+}, { passive: false });
+
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage);
+resize();
+
+// ---------------------------------------------------------------- state readout
+const _v = new THREE.Vector3(), _q = new THREE.Quaternion(), _n = new THREE.Vector3();
+function readState() {
+  const out = new Array(54);
+  for (const st of stickers) {
+    st.getWorldQuaternion(_q);
+    _n.set(0, 0, 1).applyQuaternion(_q);
+    const face = faceFromNormal(_n);
+    st.parent.getWorldPosition(_v);
+    out[faceletIndex(face, Math.round(_v.x), Math.round(_v.y), Math.round(_v.z))] = st.userData.color;
+  }
+  return out.join("");
+}
+
+function validateState(s) {
+  if (!/^[URFDLB]{54}$/.test(s)) return "State must be 54 characters from U R F D L B.";
+  for (const f of FACES) {
+    const n = s.split(f).length - 1;
+    if (n !== 9) return `Face colour ${f} appears ${n} times (expected 9).`;
+  }
+  for (let i = 0; i < 6; i++) {
+    if (s[i * 9 + 4] !== FACES[i]) return `Centre of face ${FACES[i]} must be ${FACES[i]}.`;
+  }
+  return null;
+}
+
+function loadState(s) {
+  for (const c of cubies) {
+    c.position.copy(c.userData.home);
+    c.quaternion.identity();
+  }
+  for (const st of stickers) {
+    const f = s[st.userData.homeIndex];
+    st.userData.color = f;
+    st.material.color.set(COLORS[f]);
+  }
+  root.updateMatrixWorld(true);
+}
+
+// ---------------------------------------------------------------- move animation
+const queue = [];
+let animating = null;
+let history = [];
+let msPerMove = 220;
+
+function enqueue(moves, record = true) {
+  for (const m of moves) queue.push({ move: m, record });
+  pump();
+}
+
+function pump() {
+  if (animating || queue.length === 0) return;
+  const { move, record } = queue.shift();
+  const [axis, sign] = FACE_AXIS[move[0]];
+  const quarter = move.endsWith("2") ? 2 : (move.endsWith("'") ? -1 : 1);
+  const target = -sign * quarter * Math.PI / 2; // clockwise about outward normal
+  const pivot = new THREE.Group();
+  root.add(pivot);
+  for (const c of cubies) {
+    if (Math.round(c.position[axis]) === sign) pivot.attach(c);
+  }
+  const duration = msPerMove * (quarter === 2 ? 1.4 : 1);
+  animating = { pivot, axis, target, start: performance.now(), duration, move, record };
+}
+
+const _m = new THREE.Matrix4();
+function finishMove() {
+  const { pivot, move, record } = animating;
+  pivot.rotation[animating.axis] = animating.target;
+  pivot.updateMatrixWorld(true);
+  for (const c of pivot.children.slice()) {
+    root.attach(c);
+    c.position.set(Math.round(c.position.x), Math.round(c.position.y), Math.round(c.position.z));
+    // snap orientation to an exact 90° rotation matrix
+    _m.makeRotationFromQuaternion(c.quaternion);
+    const e = _m.elements;
+    for (const i of [0, 1, 2, 4, 5, 6, 8, 9, 10]) e[i] = Math.round(e[i]);
+    c.quaternion.setFromRotationMatrix(_m);
+  }
+  root.remove(pivot);
+  root.updateMatrixWorld(true);
+  animating = null;
+  if (record) history.push(move);
+  if (queue.length === 0) refreshUI();
+  else refreshCounts();
+  pump();
+}
+
+const ease = t => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+function frame(now) {
+  if (animating) {
+    const t = Math.min(1, (now - animating.start) / animating.duration);
+    animating.pivot.rotation[animating.axis] = animating.target * ease(t);
+    if (t >= 1) finishMove();
+  }
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+function busy() { return animating !== null || queue.length > 0; }
+
+// ---------------------------------------------------------------- scramble
+function randomScramble(n) {
+  const out = [];
+  const suffixes = ["", "'", "2"];
+  while (out.length < n) {
+    const f = FACES[Math.floor(Math.random() * 6)];
+    const prev = out.length ? out[out.length - 1][0] : null;
+    const prev2 = out.length > 1 ? out[out.length - 2][0] : null;
+    if (f === prev) continue;                       // same face twice
+    if (prev === OPPOSITE[f] && prev2 === f) continue; // e.g. R L R
+    out.push(f + suffixes[Math.floor(Math.random() * 3)]);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- UI
+const $ = id => document.getElementById(id);
+
+const moveButtons = $("moveButtons");
+for (const suf of ["", "'", "2"]) {
+  for (const f of FACES) {
+    const b = document.createElement("button");
+    b.textContent = f + suf;
+    b.addEventListener("click", () => enqueue([f + suf]));
+    moveButtons.appendChild(b);
+  }
+}
+
+const net = $("net");
+const NET_POS = { U: [0, 3], L: [3, 0], F: [3, 3], R: [3, 6], B: [3, 9], D: [6, 3] };
+const netCells = [];
+for (let r = 0; r < 9; r++) for (let c = 0; c < 12; c++) {
+  const d = document.createElement("div");
+  d.className = "cell";
+  net.appendChild(d);
+  netCells.push(d);
+}
+function renderNet(s) {
+  for (const d of netCells) { d.className = "cell"; d.style.background = "transparent"; }
+  FACES.forEach((f, fi) => {
+    const [r0, c0] = NET_POS[f];
+    for (let i = 0; i < 9; i++) {
+      const d = netCells[(r0 + Math.floor(i / 3)) * 12 + c0 + (i % 3)];
+      d.className = "cell sticker";
+      d.style.background = COLORS[s[fi * 9 + i]];
+      d.title = `${f}${i + 1} (index ${fi * 9 + i})`;
+    }
+  });
+}
+
+function refreshCounts() {
+  $("moveCount").textContent = history.length;
+  $("qtmCount").textContent = history.reduce((a, m) => a + qtmCost(m), 0);
+  const h = $("history");
+  h.innerHTML = history.length ? history.join(" ") : '<span class="empty">No moves yet</span>';
+  h.scrollTop = h.scrollHeight;
+}
+
+function refreshUI() {
+  refreshCounts();
+  const s = readState();
+  $("stateBox").value = s;
+  renderNet(s);
+  const st = $("status");
+  const solved = s === SOLVED;
+  st.textContent = solved ? "Solved" : "Scrambled";
+  st.className = "status " + (solved ? "solved" : "scrambled");
+}
+
+function setMsg(id, text, err = false) {
+  const el = $(id);
+  el.textContent = text;
+  el.className = "msg" + (err ? " err" : "");
+}
+
+$("speed").addEventListener("input", e => {
+  msPerMove = +e.target.value;
+  $("speedLabel").textContent = `${msPerMove} ms`;
+});
+
+$("undoBtn").addEventListener("click", () => {
+  if (busy() || !history.length) return;
+  enqueue([invertMove(history.pop())], false);
+});
+$("rewindBtn").addEventListener("click", () => {
+  if (busy() || !history.length) return;
+  const inv = invertAlg(history);
+  history = [];
+  refreshCounts();
+  enqueue(inv, false);
+});
+$("resetBtn").addEventListener("click", () => {
+  queue.length = 0;
+  if (animating) finishMove();
+  history = [];
+  loadState(SOLVED);
+  refreshUI();
+});
+$("scrambleBtn").addEventListener("click", () => {
+  const n = Math.max(1, Math.min(200, parseInt($("scrambleLen").value, 10) || 20));
+  enqueue(randomScramble(n));
+});
+
+function playFromInput(inverse) {
+  try {
+    let moves = parseAlg($("algInput").value);
+    if (!moves.length) { setMsg("algMsg", "Enter some moves first.", true); return; }
+    if (inverse) moves = invertAlg(moves);
+    enqueue(moves);
+    setMsg("algMsg", `Playing ${moves.length} moves: ${moves.join(" ")}`);
+  } catch (err) {
+    setMsg("algMsg", err.message, true);
+  }
+}
+$("playBtn").addEventListener("click", () => playFromInput(false));
+$("playInvBtn").addEventListener("click", () => playFromInput(true));
+$("algInput").addEventListener("keydown", e => { if (e.key === "Enter") playFromInput(false); });
+
+$("loadStateBtn").addEventListener("click", () => {
+  const s = $("stateBox").value.replace(/\s+/g, "").toUpperCase();
+  const err = validateState(s);
+  if (err) { setMsg("stateMsg", err, true); return; }
+  queue.length = 0;
+  if (animating) finishMove();
+  history = [];
+  loadState(s);
+  refreshUI();
+  setMsg("stateMsg", "State loaded. (Colour counts checked; solvability is not.)");
+});
+$("copyStateBtn").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText($("stateBox").value);
+    setMsg("stateMsg", "Copied to clipboard.");
+  } catch {
+    $("stateBox").select();
+    setMsg("stateMsg", "Select-all done — press Ctrl+C to copy.");
+  }
+});
+
+document.addEventListener("keydown", e => {
+  if (e.target.matches("input, textarea")) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+    e.preventDefault();
+    $("undoBtn").click();
+    return;
+  }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const f = e.key.toUpperCase();
+  if (FACES.includes(f)) enqueue([f + (e.shiftKey ? "'" : "")]);
+});
+
+// ---------------------------------------------------------------- URL hash API
+// viz/cube_viewer.html#state=<54 chars>&moves=R_U_R'_U'
+// state is loaded first, then moves are animated on top of it.
+function applyHash() {
+  const params = new URLSearchParams(location.hash.replace(/^#/, ""));
+  const state = params.get("state");
+  if (state) {
+    const s = state.toUpperCase();
+    const err = validateState(s);
+    if (err) setMsg("stateMsg", "URL state: " + err, true);
+    else { history = []; loadState(s); }
+  }
+  const moves = params.get("moves");
+  refreshUI();
+  if (moves) {
+    try {
+      const list = parseAlg(moves.replace(/_/g, " "));
+      $("algInput").value = list.join(" ");
+      enqueue(list);
+    } catch (err) {
+      setMsg("algMsg", "URL moves: " + err.message, true);
+    }
+  }
+}
+window.addEventListener("hashchange", applyHash);
+applyHash();
+</script>
+</body>
+</html>
