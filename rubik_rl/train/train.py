@@ -42,6 +42,7 @@ class TrainConfig:
     value_weight: float = 1.0
     grad_clip: float = 1.0
     val_size: int = 50_000
+    sym_aug: int = 0          # 1 = apply a random one of the 48 cube symmetries to every training cube
     log_every: int = 200
     val_every: int = 1000
     seed: int = 0
@@ -60,6 +61,26 @@ def load_dataset(path: Path, device):
         "mask": torch.tensor(cat("mask"), device=device),
         "dist": torch.tensor(cat("dist").astype(np.int64), device=device),
     }, [s.name for s in shards]
+
+
+class SymAugment:
+    """Random cube symmetry per example, on the GPU. Distance labels are unchanged; the
+    optimal-move mask is permuted with the moves (see cube/symmetry.py)."""
+
+    def __init__(self, device):
+        from ..cube import symmetry as S
+
+        self.perm = torch.tensor(S.SYM_PERM, device=device)
+        self.color = torch.tensor(S.SYM_COLOR.astype(np.int64), device=device)
+        self.move_inv = torch.tensor(S.SYM_MOVE_INV, device=device)
+        self.n = S.N_SYM
+
+    def __call__(self, states, mask, generator=None):
+        k = torch.randint(0, self.n, (len(states),), device=states.device, generator=generator)
+        moved = torch.gather(states, 1, self.perm[k])
+        states = torch.gather(self.color[k], 1, moved.long()).to(states.dtype)
+        mask = torch.gather(mask, 1, self.move_inv[k])
+        return states, mask
 
 
 class Encoder:
@@ -135,6 +156,7 @@ def train(cfg: TrainConfig):
     net = CubeNet(cfg.model).to(dev)
     opt = torch.optim.AdamW(net.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
     enc = Encoder(dev)
+    aug = SymAugment(dev) if cfg.sym_aug else None
     (run_dir / "config.json").write_text(json.dumps(
         {**asdict(cfg), "n_train": n_train, "n_val": cfg.val_size, "shards": shard_names,
          "params": net.n_params()}, indent=1))
@@ -151,8 +173,10 @@ def train(cfg: TrainConfig):
         pos += cfg.batch
         for gr in opt.param_groups:
             gr["lr"] = lr_at(step, cfg)
-        loss, m = losses(net, enc, train_data["states"][idx], train_data["mask"][idx],
-                         train_data["dist"][idx], cfg.value_weight)
+        b_states, b_mask = train_data["states"][idx], train_data["mask"][idx]
+        if aug is not None:
+            b_states, b_mask = aug(b_states, b_mask, g)
+        loss, m = losses(net, enc, b_states, b_mask, train_data["dist"][idx], cfg.value_weight)
         opt.zero_grad(set_to_none=True)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(net.parameters(), cfg.grad_clip)
