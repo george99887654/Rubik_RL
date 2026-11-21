@@ -32,7 +32,11 @@ uv run python -m rubik_rl.cube.bench     # env throughput benchmark
 - `rubik_rl/viz.py`: `show(state, moves)` opens the viewer through a `file://` URL.
 - `viz/cube_viewer.html`: standalone three.js viewer, loaded from cdnjs. Open the file
   directly. **Don't start a local web server for it.**
-- `rubik_rl/{models,train,search,eval}`: empty so far. They're for Phases 2–5.
+- `rubik_rl/models/mlp.py`: `CubeNet`, a residual fully connected network. The input is
+  288 values; the stem is 4096 → 1024 wide, followed by 4 residual blocks of 1024 (13.8 M
+  parameters). It has two heads: a policy head with 18 logits and a value head giving
+  moves left. `masked_log_policy` applies `ALLOWED` before the softmax.
+- `rubik_rl/{train,search,eval}`: empty so far. They're for Phases 2–5.
 - `tests/`: on the pytest `pythonpath`, so tests can import each other, e.g.
   `from test_viewer_conventions import run`.
 
@@ -62,15 +66,17 @@ two-phase solver.
 2. Phase 2: eval module. Fixed test sets (random-state cubes plus per-depth sets), BFS
    optimal lengths for short scrambles, two-phase baseline. Report solve rate, average
    HTM length, % optimal, time and nodes expanded.
-3. Phase 3: EfficientCube-style policy. Residual MLP trunk with an 18-way softmax, trained
-   with cross-entropy on GPU random walks (label = `INVERSE_MOVE` of the last move), plus
-   beam search.
-4. Phase 4: add a value head (cost-to-go, DeepCubeA-style value iteration) and value-guided
-   or weighted A* search.
-5. Phase 5: 48-symmetry augmentation, bigger models and beams, policy+value combined search.
+3. Phase 3 onward: **not decided yet, on purpose.** The user is deriving the training and
+   search method from first principles. Once Phase 2 baselines exist, measure where simple
+   approaches fail, then design the method around that. `CubeNet` (policy + value heads) is a
+   general building block, not a commitment to any method.
 
-Design decision: a policy with greedy rollout isn't enough to get the fewest moves. Always
-pair the network with search, and measure every change on the Phase 2 test sets.
+Working style: explain ideas from first principles and with small experiments in our own
+code. Don't present published cube-solving methods as the plan. Lay out trade-offs and let
+the user choose. Generic tools (supervised learning, value iteration, beam search, A*) are fine.
+
+Design principle: a network that always takes its top move isn't enough to get the fewest
+moves. Pair the network with search, and measure every change on the Phase 2 test sets.
 
 ## Git
 
