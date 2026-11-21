@@ -11,6 +11,9 @@ about 18 moves, and no position needs more than 20.
 uv sync                                  # install deps into .venv (Python 3.11, torch cu128)
 uv run pytest -q                         # all tests (~3 s once solver tables exist)
 uv run python -m rubik_rl.cube.bench     # env throughput benchmark
+uv run python -m rubik_rl.eval.evaluate --solver twophase --sets depth_1-15,random_1000
+uv run python -m rubik_rl.eval.evaluate --compare       # table of all saved results
+uv run python -m rubik_rl.eval.testsets --list          # test set stats (rebuild: no --list)
 ```
 
 - Windows machine with an RTX 3080 (10 GB). Use `uv run ...`; there is no system Python.
@@ -36,7 +39,20 @@ uv run python -m rubik_rl.cube.bench     # env throughput benchmark
   288 values; the stem is 4096 → 1024 wide, followed by 4 residual blocks of 1024 (13.8 M
   parameters). It has two heads: a policy head with 18 logits and a value head giving
   moves left. `masked_log_policy` applies `ALLOWED` before the softmax.
-- `rubik_rl/{train,search,eval}`: empty so far. They're for Phases 2–5.
+- `rubik_rl/eval/optimal.py`: `OptimalSolver`, an exact optimal solver up to 12 moves that
+  meets in the middle. It uses a GPU breadth-first table of every state within 6 moves of
+  solved, cached in `data/` and built in about 2 s, plus a forward search up to 6 moves.
+  The table's layer sizes match the known counts of positions at each distance.
+- `rubik_rl/eval/testsets.py`: fixed seeded test sets in `testsets/*.npz`, committed to git.
+  Sets: `depth_1`…`depth_15` (200 each), `random_1000` (100-move scrambles), `hard`
+  (superflip). Each holds `states`, `scramble` and `optimal` (-1 means unknown, i.e. more
+  than 12 moves).
+- `rubik_rl/eval/solvers.py`: the solver interface (`name`, `solve(state) -> moves | None`,
+  optional `nodes`). Baselines: `twophase:<target>:<timeout>`, `optimal`, `random:<tries>`.
+- `rubik_rl/eval/evaluate.py`: replays every solution. It reports solve rate, mean length,
+  % optimal, gap from optimal and time, and saves to `runs/eval/` (git-ignored).
+- `rubik_rl/eval/label_study.py`: measures random-walk labels against exact distances.
+- `rubik_rl/{train,search}`: empty so far.
 - `tests/`: on the pytest `pythonpath`, so tests can import each other, e.g.
   `from test_viewer_conventions import run`.
 
@@ -63,13 +79,20 @@ two-phase solver.
 ## Plan / status
 
 1. ✅ Phase 0: setup. ✅ Phase 1: batched environment plus 3D viewer (tag `v1.0.0`).
-2. Phase 2: eval module. Fixed test sets (random-state cubes plus per-depth sets), BFS
-   optimal lengths for short scrambles, two-phase baseline. Report solve rate, average
-   HTM length, % optimal, time and nodes expanded.
+2. ✅ Phase 2: evaluation. Test sets, exact optimal solver up to 12 moves, two-phase and
+   random baselines, label study. Results are in `docs/baselines.md`.
 3. Phase 3 onward: **not decided yet, on purpose.** The user is deriving the training and
    search method from first principles. Once Phase 2 baselines exist, measure where simple
    approaches fail, then design the method around that. `CubeNet` (policy + value heads) is a
    general building block, not a commitment to any method.
+
+Decisions so far (made by the user):
+- Training data: generate cubes within 12–13 moves of solved and label them **exactly**
+  with the optimal solver (distance plus the set of all optimal next moves). Don't use
+  "undo the last move" labels.
+- Policy loss: **"any correct move counts"**, i.e. loss = -log(sum of p over optimal moves).
+- Batch composition: **natural**, meaning whatever distribution the generated dataset has
+  (no rebalancing by distance).
 
 Working style: explain ideas from first principles and with small experiments in our own
 code. Don't present published cube-solving methods as the plan. Lay out trade-offs and let
