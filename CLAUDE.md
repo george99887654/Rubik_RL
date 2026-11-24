@@ -52,7 +52,16 @@ uv run python -m rubik_rl.eval.testsets --list          # test set stats (rebuil
 - `rubik_rl/eval/evaluate.py`: replays every solution. It reports solve rate, mean length,
   % optimal, gap from optimal and time, and saves to `runs/eval/` (git-ignored).
 - `rubik_rl/eval/label_study.py`: measures random-walk labels against exact distances.
-- `rubik_rl/{train,search}`: empty so far.
+- `rubik_rl/data/labels.py`, `generate.py`: exact labels (depth-7 distance table plus
+  search) and the sharded dataset generator.
+- `rubik_rl/train/train.py`: supervised training on exact labels (optional 48-symmetry
+  augmentation).
+- `rubik_rl/train/self_train.py`: the user's self-training method. A value-ranked beam solves
+  scrambles at length n within n moves; successful paths train policy (move taken) and value
+  (moves remaining), plus self-consistency targets; a curriculum promotes n.
+- `rubik_rl/search/beam.py` (policy beam) and `value_beam.py` (value-ranked beam, the user's
+  design).
+- `docs/experiments.md` and `viz/versions.html`: every trained version (rMAJOR.MINOR.PATCH).
 - `tests/`: on the pytest `pythonpath`, so tests can import each other, e.g.
   `from test_viewer_conventions import run`.
 

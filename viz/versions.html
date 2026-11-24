@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rubik RL Versions</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --text: #1c2230; --muted: #667085; --border: #dde1e8;
+    --accent: #2f6fed; --good: #12805c; --warn: #b54708; --bad: #c0362c; --chip: #eef1f6;
+    --bar: #2f6fed; --bar2: #9aa4b2; --code: #f0f2f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12141a; --panel: #1b1e26; --text: #e6e8ee; --muted: #98a1b3; --border: #2d323e;
+      --accent: #6b9bff; --good: #3ccf8e; --warn: #f5a35c; --bad: #ff7b72; --chip: #252a35;
+      --bar: #6b9bff; --bar2: #5b6475; --code: #232733;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12141a; --panel: #1b1e26; --text: #e6e8ee; --muted: #98a1b3; --border: #2d323e;
+    --accent: #6b9bff; --good: #3ccf8e; --warn: #f5a35c; --bad: #ff7b72; --chip: #252a35;
+    --bar: #6b9bff; --bar2: #5b6475; --code: #232733;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 32px 0 10px; }
+  .sub { color: var(--muted); margin: 0 0 16px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .label { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-weight: 700; color: var(--accent); }
+  .chip { display: inline-block; background: var(--chip); border-radius: 999px; padding: 1px 9px; font-size: 12px; margin: 2px 4px 2px 0; }
+  .chip.good { color: var(--good); } .chip.warn { color: var(--warn); } .chip.bad { color: var(--bad); }
+  .tablewrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); }
+  table { border-collapse: collapse; width: 100%; min-width: 760px; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; background: var(--panel); position: sticky; top: 0; }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .muted { color: var(--muted); }
+  code { font-family: ui-monospace, Consolas, monospace; background: var(--code); padding: 0 4px; border-radius: 4px; font-size: 12.5px; }
+  .timeline { position: relative; margin-left: 8px; border-left: 2px solid var(--border); padding-left: 18px; }
+  .ver { position: relative; margin-bottom: 14px; }
+  .ver::before { content: ""; position: absolute; left: -25px; top: 18px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg); }
+  .ver.patch::before { background: var(--warn); }
+  .ver.running::before { background: var(--good); }
+  .ver h3 { margin: 0 0 2px; font-size: 15px; }
+  .ver .meta { color: var(--muted); font-size: 12.5px; margin-bottom: 8px; }
+  .ver ul { margin: 6px 0 0 18px; padding: 0; }
+  .ver li { margin: 2px 0; }
+  .bars { display: grid; grid-template-columns: 120px 1fr 64px; gap: 6px 10px; align-items: center; }
+  .bars .track { background: var(--chip); border-radius: 6px; height: 14px; overflow: hidden; }
+  .bars .fill { height: 100%; background: var(--bar); border-radius: 6px; }
+  .bars .fill.ref { background: var(--bar2); }
+  .bars .v { text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; }
+  .note { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+  @media (max-width: 600px) { .bars { grid-template-columns: 88px 1fr 52px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Rubik RL: model versions</h1>
+  <p class="sub">Every trained model: its training scheme, the features it uses, and its results. Lengths are in HTM moves. Last updated 2026-11-24 (after r3.9.0 finished).</p>
+
+  <div class="card">
+    <strong>Version labels: <span class="label">rMAJOR.MINOR.PATCH</span></strong>
+    <div class="grid" style="margin-top:8px">
+      <div><span class="chip good">MAJOR</span> a big change in performance</div>
+      <div><span class="chip">MINOR</span> a change to the training scheme or settings</div>
+      <div><span class="chip warn">PATCH</span> a bug fix</div>
+    </div>
+    <p class="note">The run names in brackets (for example <code>exact_v1</code>) are the folder names in <code>checkpoints/</code> and <code>runs/train/</code>.</p>
+  </div>
+
+  <h2>Shortest solutions on random cubes (<code>random_1000</code>, 50 cubes, best search per version)</h2>
+  <div class="card">
+    <div class="bars" id="bars"></div>
+    <p class="note">Shorter is better. Each bar is drawn as 40 minus the length, so a longer bar means a shorter solution. The solve rate is in brackets; lengths are averaged over solved cubes only. Grey bars are the reference solver: Kociemba's two-phase algorithm, someone else's work, used only as a benchmark.</p>
+  </div>
+
+  <h2>All versions at a glance</h2>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Version</th><th>Labels from</th><th>Key features</th><th>Training</th>
+          <th class="num">Held-out policy acc.</th><th class="num">At dist. 12</th>
+          <th class="num">depth_12 (best search)</th><th class="num">random_1000 (best search)</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+  <p class="note">"Held-out policy accuracy" means the network's top move is optimal, measured on 50,000 exactly labelled cubes (distances 1–12). It needs no search. For self-trained versions the exact labels are used only for this measurement, never for training.</p>
+
+  <h2>Version history</h2>
+  <div class="timeline" id="timeline"></div>
+
+  <h2>Reference solvers (not ours)</h2>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Solver</th><th class="num">depth_10</th><th class="num">depth_12</th><th class="num">random_1000</th><th class="num">time / cube</th></tr></thead>
+      <tbody>
+        <tr><td>Two-phase (Kociemba), first solution ≤ 20 moves</td><td class="num">15.43</td><td class="num">18.16</td><td class="num">19.77</td><td class="num">0.16 s</td></tr>
+        <tr><td>Two-phase (Kociemba), best found in 5 s</td><td class="num">9.93</td><td class="num">12.00</td><td class="num">18.75</td><td class="num">5 s</td></tr>
+        <tr><td>Our exact solver (meet in the middle, ≤ 12 moves)</td><td class="num">optimal</td><td class="num">optimal</td><td class="num">out of range</td><td class="num">≤ 0.09 s</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const V = [
+  { label: "r1.0.0", run: "exact_v1", kind: "major", labels: "Exact solver",
+    features: ["exact labels ≤ 12", "policy: any correct move", "value head (unused)", "policy beam search"],
+    training: "2 M cubes, 10k steps × 8192 (42 epochs), 4 min",
+    acc: 70.3, acc12: 20, d12: "96% · 21.62", rnd: "88% · 31.95", rndLen: 31.95, rndRate: 88,
+    title: "First model, trained on exact labels",
+    meta: "Supervised on 2 M cubes within 12 moves, each labelled with its distance and all optimal moves",
+    notes: ["Training accuracy 100%, held-out 70.3%: the network <b>memorised</b> the training cubes",
+            "Held-out accuracy peaked at the first check (step 1000), then declined",
+            "Greedy search solved 1% of random cubes; beam 1024 solved 88%, at 31.95 moves"] },
+  { label: "r2.0.0", run: "exact_v2_sym", kind: "major", labels: "Exact solver",
+    features: ["+ 48-symmetry augmentation", "exact labels ≤ 12", "policy beam search"],
+    training: "same data and steps as r1.0.0, 4 min",
+    acc: 79.6, acc12: 31, d12: "100% · 14.02", rnd: "100% · 23.62", rndLen: 23.62, rndRate: 100,
+    title: "Symmetry augmentation",
+    meta: "Each training cube gets a random one of the 48 cube symmetries; labels stay exact",
+    notes: ["Memorising stopped: training 80.3% vs held-out 79.6%",
+            "Beam 1024 solved every random cube, at 23.62 moves (r1.0.0: 88% solved, 31.95)"] },
+  { label: "r2.1.0", run: "exact_v3_sym40k", kind: "minor", labels: "Exact solver",
+    features: ["4× longer training", "symmetry augmentation", "policy or value beam"],
+    training: "40k steps (168 epochs), 18 min",
+    acc: 83.0, acc12: 35, d12: "100% · 12.14", rnd: "100% · 22.54", rndLen: 22.54, rndRate: 100,
+    title: "4× longer training",
+    meta: "Same as r2.0.0, 40,000 steps",
+    notes: ["Held-out accuracy 83.0%, the best of all versions; gains were levelling off",
+            "Policy beam 1024: random cubes 22.54 moves. Value beam 1024: depth_12 98% optimal",
+            "Its value head <b>saturates at about 11.5</b> for every cube deeper than 12 (superflip: 12.6)"] },
+  { label: "r3.0.0", run: "self_v1", kind: "major", labels: "Own search (no exact labels)",
+    features: ["self-training from scratch", "value-ranked beam, width 5", "curriculum n = 1…11", "self-consistency value targets", "symmetry augmentation"],
+    training: "90 min; curriculum reached n = 9 (stuck at a 95% solve-rate threshold)",
+    acc: 79.5, acc12: 30, d12: "100% · 12.12", rnd: "86% · 21.30", rndLen: 21.30, rndRate: 86, bnBug: true,
+    title: "Your self-training method",
+    meta: "Solve cubes scrambled 1…n with a value-ranked beam (bound n); train on found solutions (policy = move taken, value = moves remaining)",
+    notes: ["Without self-consistency targets the curriculum stuck at n = 2: the value head rated unseen cubes as near",
+            "Training targets were 100% optimal at every n",
+            "Value beam 1024: depth_12 98% optimal; random cubes 21.30 moves but 14% unsolved",
+            "Affected by the BatchNorm two-pass bug (fixed in r3.2.1)"] },
+  { label: "r3.1.0", run: "self_v2_w15", kind: "minor", labels: "Own search (no exact labels)",
+    features: ["beam width 5 → 15", "curriculum allowed up to n = 15", "uniform lengths 1…n", "promotion: 95% solved"],
+    training: "180 min; n = 10 at 24 min, then stuck for 2.6 h at about 94% solved",
+    acc: 80.7, acc12: 30, d12: "100% · 12.00", rnd: "86% · 21.60", rndLen: 21.60, rndRate: 86, bnBug: true,
+    title: "Width 15",
+    meta: "As r3.0.0 with width 15 and the curriculum allowed up to 15",
+    notes: ["Reached n = 9 in 4.3 min (r3.0.0: 18 min)",
+            "Value beam 1024: <b>all 50 depth_12 cubes solved optimally</b>",
+            "Value head topped out at about 10 (random cubes predicted 9.95, true about 18)",
+            "Affected by the BatchNorm bug: 1-move cubes valued at 1.48"] },
+  { label: "r3.2.0", run: "self_v3", kind: "minor", labels: "Own search (no exact labels)",
+    features: ["lengths halving down from n (n: ½, n−1: ¼, …)", "promotion: 90% solved and 90% of values rounding to L"],
+    training: "180 min; stuck at n = 5 (51 min) and n = 6 (127 min)",
+    acc: 73.7, acc12: 21, d12: "not evaluated", rnd: "not evaluated", bnBug: true,
+    title: "Halving schedule and value-based promotion",
+    meta: "New length schedule and a value criterion for promotion: V(start) must round to the found length L",
+    notes: ["The value check failed: 1-move cubes valued at 1.82 and 2-move at 2.80",
+            "Diagnosis: BatchNorm statistics mismatch from two separate forward passes per step (a bug in the training code)"] },
+  { label: "r3.2.1", run: "self_v4", kind: "patch", labels: "Own search (no exact labels)",
+    features: ["FIX: one forward pass for path and self-consistency batches"],
+    training: "180 min; n = 6 at 2.9 min; stuck at n = 7 from 28.5 min",
+    acc: 77.5, acc12: 25, d12: "100% · 12.36", rnd: "80% · 22.38", rndLen: 22.38, rndRate: 80,
+    title: "BatchNorm bug fix",
+    meta: "Same scheme as r3.2.0, bug fixed",
+    notes: ["Values at distances 1–4 are now essentially exact (error 0.01–0.04)",
+            "Stuck at n = 7: the value spread there (±0.48) is too wide for 90% to round correctly",
+            "Even exact-label training (r2.1.0) only rounded 64% correctly at distance 7"] },
+  { label: "r3.3.0", run: "self_v5", kind: "minor", labels: "Own search (no exact labels)",
+    features: ["value criterion: |V − L| ≤ 10% of L", "everything else as r3.2.1"],
+    training: "180 min; n = 7 at 19.1 min, n = 8 at 145.7 min",
+    acc: 78.8, acc12: 27, d12: "100% · 12.16", rnd: "78% · 21.62", rndLen: 21.62, rndRate: 78,
+    title: "Value within 10%",
+    meta: "Promotion when ≥ 90% solved and ≥ 90% of values within 10% of the found length",
+    notes: ["Reached n = 7 at 19.1 min (r3.2.1: 28.5 min) and <b>n = 8 at 145.7 min</b> (r3.2.1 never left 7)",
+            "At n = 7 the value check climbed slowly: 0.77 (20 min), 0.85 (60 min), 0.886 (121 min), then promoted",
+            "End: n = 8, solve rate 99.9%, value check 0.85",
+            "Value error 0.58 overall, the best of the self-trained versions; held-out policy accuracy 78.8%",
+            "Value beam 1024: depth_12 98% optimal (12.16); random cubes 78% solved at 21.62 moves"] },
+  { label: "r3.4.0", run: "self_v6", kind: "minor", labels: "Own search (no exact labels)",
+    features: ["promotion: per-depth value closeness, mean 1 − |V − L| / L", "n: 0.60 · n−1: 0.80 · n−2: 0.90 · ≤n−3: 0.95", "90% solve rate", "halving lengths"],
+    training: "stopped at 148 min; n = 10 at 22.5 min, n = 11 at 140 min",
+    acc: 81.3, acc12: 31, d12: "100% · 12.00", rnd: "86% · 21.23", rndLen: 21.23, rndRate: 86,
+    title: "Per-depth value thresholds",
+    meta: "Looks ahead: only 60% closeness needed at the new depth n, stricter for depths already learned",
+    notes: ["n = 8 at 3.3 min (r3.3.0: 146 min)",
+            "Blocked at n = 10 by the ≤ n−3 group (0.92–0.94): value overestimated at depths 6–8 (+0.2 to +0.35)",
+            "Diagnosis: self-consistency targets were not the cause there; ~21% of self-consistency cubes are deeper than n and have targets that are too low",
+            "Stopped by request to start r3.5.0"] },
+  { label: "r3.5.0", run: "self_v7", kind: "minor", labels: "Own search (no exact labels)",
+    features: ["all scrambles at length n", "promotion groups: path cubes by remaining moves", "same thresholds as r3.4.0"],
+    training: "180 min; n = 10 at 26.2 min, n = 11 at 56.3 min",
+    acc: 81.9, acc12: 33, d12: "100% · 12.00", rnd: "86% · 20.65", rndLen: 20.65, rndRate: 86,
+    title: "All cubes at the frontier",
+    meta: "Shorter distances come only from cubes along solved paths; value groups use moves remaining",
+    notes: ["n = 11 at 56.3 min (r3.4.0: 140 min)",
+            "All value groups passed throughout; the only gate was the solve rate at n (0.70 → 0.81 at n = 11)",
+            "Best self-trained monitor: policy accuracy 81.9%, value error 0.46",
+            "Value beam 1024: depth_12 100% optimal; depth_14 96% solved, 15.94 moves; random cubes 20.65 moves, 86% solved",
+            "Continued from its checkpoint at n = 11 (self_v7b): solve rate flat at about 0.82 for 100 rounds; the process died at 31 min (monitor 82.4%, value error 0.445)"] },
+  { label: "r3.6.0", run: "self_v8", kind: "minor", labels: "Own search (no exact labels)",
+    features: ["beam width 64", "from r3.5.0 at n = 11"],
+    training: "stopped by request after 5.8 min (no checkpoint)",
+    acc: null, acc12: null, d12: "–", rnd: "–", rndLen: null, rndRate: null,
+    title: "Wider beam (64)",
+    meta: "Tests whether the n = 11 stall was the search dropping the right path",
+    notes: ["Solve rate at n = 11 jumped to 0.954 (width 15: 0.82): the beam, not the value head, was the limit",
+            "Stopped to try width 32 with exploration noise instead"] },
+  { label: "r3.7.0", run: "self_v9", kind: "minor", labels: "Own search (no exact labels)",
+    features: ["beam width 32", "±10% proportional ranking noise", "full expansion until candidates > width"],
+    training: "stopped at 31.9 min, n = 11",
+    acc: 82.4, acc12: 33, d12: "–", rnd: "–", rndLen: null, rndRate: null,
+    title: "Width 32 + proportional noise",
+    meta: "Ranking score V·(1 + u), u uniform in [−0.1, 0.1], during training searches only",
+    notes: ["Solve rate at n = 11 fell to 0.70–0.72: at V ≈ 10 the noise is ±1 move, as large as the signal",
+            "Monitor at round 100: 82.4%, value error 0.462"] },
+  { label: "r3.8.0", run: "self_v10", kind: "minor", labels: "Own search (no exact labels)",
+    features: ["beam width 32", "fixed ±0.3 ranking noise", "n 11 → 15", "from r3.7.0"],
+    training: "180 min; n = 12 at 11.2 min, then stuck",
+    acc: 83.7, acc12: 36, d12: "100% · 12.00", rnd: "92% · 20.43", rndLen: 20.43, rndRate: 92,
+    title: "Fixed-size noise; first to reach n = 12",
+    meta: "Ranking score V + u, u uniform in [−0.3, 0.3]",
+    notes: ["<b>n = 12 at 11.2 min</b>, the first self-trained run to get there",
+            "Solve rate at n = 12 flat at 0.69 → 0.72 for 2.5 hours; value groups passed throughout",
+            "Monitor 83.7%, value error 0.455",
+            "Value beam 1024: depth_14 100% solved, 15.48 moves; random cubes 92% solved, 20.43 moves"] },
+  { label: "r3.9.0", run: "self_v11", kind: "minor", labels: "Own search (no exact labels)",
+    features: ["beam width 128", "fixed ±0.3 ranking noise", "n 12 → 15", "from r3.8.0"],
+    training: "180 min; n = 13 at 140.6 min",
+    acc: 83.9, acc12: 36, d12: "100% · 12.00", rnd: "92% · 20.17", rndLen: 20.17, rndRate: 92,
+    title: "Width 128; first to reach n = 13",
+    meta: "About 55 s per round (width 32: about 17 s); 7.4 of 10 GB GPU memory",
+    notes: ["Solve rate at n = 12 jumped at once from 0.72 to 0.89, then hovered at 0.89–0.90 for 140 min",
+            "<b>n = 13 at 140.6 min</b>; solve rate there flat at 0.66–0.69 until the end",
+            "Monitor 83.9% (best), value error 0.440",
+            "Value beam 1024: depth_14 100% solved, 15.44 moves; <b>random cubes 92% solved, 20.17 moves (best so far)</b>",
+            "Lesson: width lifts the solve rate once, then it stays flat; training only on successful paths doesn't fix the cubes that fail"] },
+];
+
+const $ = (id) => document.getElementById(id);
+const kindChip = { major: '<span class="chip good">major</span>', minor: '<span class="chip">minor</span>',
+                   patch: '<span class="chip warn">patch</span>', running: '<span class="chip good">running</span>' };
+
+$("tbody").innerHTML = V.map(v => `
+  <tr>
+    <td><span class="label">${v.label}</span><br><span class="muted">${v.run}</span><br>${kindChip[v.kind]}</td>
+    <td>${v.labels}</td>
+    <td>${v.features.map(f => `<span class="chip">${f}</span>`).join("")}${v.bnBug ? '<span class="chip bad">BatchNorm bug</span>' : ""}</td>
+    <td>${v.training}</td>
+    <td class="num">${v.acc == null ? "–" : v.acc.toFixed(1) + "%"}</td>
+    <td class="num">${v.acc12 == null ? "–" : v.acc12 + "%"}</td>
+    <td class="num">${v.d12}</td>
+    <td class="num">${v.rnd}</td>
+  </tr>`).join("");
+
+$("timeline").innerHTML = V.map(v => `
+  <div class="ver card ${v.kind === "patch" ? "patch" : ""} ${v.kind === "running" ? "running" : ""}">
+    <h3><span class="label">${v.label}</span> · ${v.title} ${kindChip[v.kind]}</h3>
+    <div class="meta">${v.run} · ${v.meta}</div>
+    <div>${v.features.map(f => `<span class="chip">${f}</span>`).join("")}</div>
+    <ul>${v.notes.map(n => `<li>${n}</li>`).join("")}</ul>
+  </div>`).join("");
+
+const bars = [
+  ...V.filter(v => v.rndLen).map(v => ({ name: v.label, len: v.rndLen, rate: v.rndRate, ref: false })),
+  { name: "two-phase fast", len: 19.77, rate: 100, ref: true },
+  { name: "two-phase 5 s", len: 18.75, rate: 100, ref: true },
+];
+$("bars").innerHTML = bars.map(b => `
+  <div>${b.name}</div>
+  <div class="track"><div class="fill ${b.ref ? "ref" : ""}" style="width:${Math.max(4, (40 - b.len) / 25 * 100)}%"></div></div>
+  <div class="v">${b.len.toFixed(2)} <span class="muted">(${b.rate}%)</span></div>`).join("");
+</script>
+</body>
+</html>
