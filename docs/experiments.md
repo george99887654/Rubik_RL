@@ -21,6 +21,7 @@ training-scheme change, PATCH a bug fix. Overview page: `viz/versions.html`.
 | r3.9.0 | self_v11 | width 128 |
 | r3.10.0 | self_v12 | halving solve rule (n 50%, n−1 75%, n−2 87.5%, …) |
 | r3.11.0 | self_v13 | value on solved-path cubes only (no self-consistency), from scratch |
+| r3.12.0 | self_v14 | value need for ≤ n−3 capped at 0.90 |
 
 All models were trained on `data/exact_L12`: 2 M cubes within 12 moves, exactly labelled,
 about 20.8 k per distance. Settings: "any correct move counts" policy loss, natural batches,
@@ -206,3 +207,19 @@ trained. Otherwise as r3.10.0 (width 128, ±0.3 noise, halving solve rule), but 
   group stayed at 0.934–0.947, and promoted only on a lucky streak. After 6 h in total:
   monitor 77.2%, value error 0.55; value beam 1024: depth_12 96% optimal (12.28), depth_14
   92% solved (17.39), random (200 cubes) 87.5% solved at 22.05 moves.
+- **Continued again (self_v13c):** 180 more minutes from n = 12. It stayed at n = 12: solve
+  rate 0.66 → 0.72, ≤ n−3 group 0.946–0.950. After 9 h: monitor 78.8%, value error 0.52;
+  value beam 1024: depth_12 94% optimal (12.22), depth_14 98% solved (16.98), random (200
+  cubes) 87.0% solved at 21.66 moves.
+
+## r3.12.0 (self_v14): value need capped at 0.90
+
+Value needs: n 0.60, n−1 0.80, n−2 0.90, ≤ n−3 0.90 (was 0.95). Continued from r3.11.0 after
+9 h; otherwise unchanged (path-only value, halving solve rule, width 128, ±0.3 noise).
+
+- **Curriculum:**
+  - n = 13 at 5.8 min. The solve rate at 13 rose from 0.45 to 0.50, and at n−1 = 12 from
+    0.73 to 0.77. Both just cleared their bars, and n = 14 came at 164.2 min.
+  - At 14 the solve rate was 0.27–0.28 (r3.10.0 at 14: 0.41).
+- **Results:** monitor 79.8%, value error 0.63. Value beam 1024: depth_12 98% optimal
+  (12.14); depth_14 96% solved (16.60); random (200 cubes) 92.5% solved at 21.17 moves.

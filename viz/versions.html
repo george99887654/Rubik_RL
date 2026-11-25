@@ -63,7 +63,7 @@
 <body>
 <div class="wrap">
   <h1>Rubik RL: model versions</h1>
-  <p class="sub">Every trained model: its training scheme, the features it uses, and its results. Lengths are in HTM moves. Last updated 2026-11-24 (after r3.11.0 finished).</p>
+  <p class="sub">Every trained model: its training scheme, the features it uses, and its results. Lengths are in HTM moves. Last updated 2026-11-24 (after r3.12.0 finished).</p>
 
   <div class="card">
     <strong>Version labels: <span class="label">rMAJOR.MINOR.PATCH</span></strong>
@@ -268,7 +268,19 @@ const V = [
             "Monitor policy accuracy 74.9%, value error 0.65",
             "Value beam 1024: depth_12 92% optimal (12.42); depth_14 86% solved; random cubes (200) 75.5% solved, 23.13 moves",
             "Continued 180 min from n = 11 (self_v13b): n = 12 at 127.5 min; ≤ n−3 group still 0.934–0.947",
-            "After 6 h: monitor 77.2%, value error 0.55; value beam 1024: depth_12 96% optimal (12.28), depth_14 92% solved (17.39), random cubes (200) 87.5% solved, 22.05 moves"] },
+            "After 6 h: monitor 77.2%, value error 0.55; value beam 1024: depth_12 96% optimal (12.28), depth_14 92% solved (17.39), random cubes (200) 87.5% solved, 22.05 moves",
+            "Third 180 min from n = 12 (self_v13c): stayed at n = 12; solve rate 0.66 → 0.72; ≤ n−3 group 0.946–0.950",
+            "After 9 h: monitor 78.8%, value error 0.52; value beam 1024: depth_12 94% optimal (12.22), depth_14 98% solved (16.98), random cubes (200) 87.0% solved, 21.66 moves"] },
+  { label: "r3.12.0", run: "self_v14", kind: "minor", labels: "Own search (no exact labels)",
+    features: ["value need ≤ n−3 capped at 0.90 (n−2 0.90, n−1 0.80, n 0.60)", "path-only value", "halving solve rule", "from r3.11.0 (9 h)"],
+    training: "180 min; n = 13 at 5.8 min, n = 14 at 164.2 min",
+    acc: 79.8, acc12: 31, d12: "100% · 12.14", rnd: "92.5% · 21.17", rndLen: 21.17, rndRate: 92.5,
+    title: "Value need capped at 90%",
+    meta: "Path-only value continues; the cap removes the ≤ n−3 gate that held r3.11.0",
+    notes: ["n = 13 at 5.8 min; solve rate at 13 rose 0.45 → 0.50 and n−1 (12) 0.73 → 0.77, both just clearing their bars by 164 min",
+            "n = 14 at 164.2 min: solve rate 0.27–0.28 (r3.10.0 at 14: 0.41)",
+            "Monitor 79.8%, value error 0.63",
+            "Value beam 1024: depth_12 98% optimal (12.14); depth_14 96% solved (16.60); random cubes (200) 92.5% solved, 21.17 moves"] },
 ];
 
 const $ = (id) => document.getElementById(id);
