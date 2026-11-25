@@ -19,7 +19,9 @@ Each round:
      where V_frozen is a copy of the network refreshed every `target_sync` steps. This
      teaches V that cubes it has never seen are far, not near.
   5. promotion: raise n by 1 (until n_max) when, for `promote_rounds` rounds in a row,
-       - the solve rate on cubes scrambled with exactly n moves is >= promote_at, and
+       - the solve rate on cubes scrambled with exactly n moves is >= promote_at
+         (solve_rule "halving": >= 1 - 0.5**(k+1) at every depth n-k, i.e. n: 50%, n-1: 75%,
+         n-2: 87.5%, ...; depths below n are checked on extra scrambles after training), and
        - the value closeness score, mean of 1 - |V - r| / r over cubes along solved paths
          (r = moves remaining on the found path), is per group of r at least
          r = n: 0.60, n-1: 0.80, n-2: 0.90, <= n-3: 0.95 (value_need). Empty groups are skipped.
@@ -68,7 +70,14 @@ class SelfTrainConfig:
     collect_per_round: int = 16384
     bellman_buffer: int = 2_000_000
     target_sync: int = 200
-    promote_at: float = 0.90          # solve rate on length-n cubes
+    promote_at: float = 0.90          # solve rate on length-n cubes ("fixed" solve_rule)
+    # "fixed": solve rate at n >= promote_at.
+    # "halving": solve rate at n-k >= 1 - 0.5**(k+1) for every k = 0..n-1
+    #            (n: 50%, n-1: 75%, n-2: 87.5%, n-3: 93.75%, ...). The lower depths are measured
+    #            on `check_cubes` extra scrambles per depth (evaluation only, not trained on),
+    #            only in rounds where depth n and the value check already pass.
+    solve_rule: str = "fixed"
+    check_cubes: int = 1024
     length_mode: str = "frontier"     # "frontier": all cubes scrambled with n moves; "halving": n:1/2, n-1:1/4, ...
     # value closeness needed per group [n, n-1, n-2, <= n-3] of path cubes by REMAINING moves;
     # score = mean(1 - |V - r| / r)
@@ -193,6 +202,22 @@ def length_schedule(n: int, total: int) -> np.ndarray:
     return np.concatenate([np.full(c, L, dtype=np.int64) for L, c in counts.items() if c > 0])
 
 
+def solve_need(k: int) -> float:
+    """"halving" rule: solve rate needed at depth n-k is 1 - 0.5**(k+1)."""
+    return 1.0 - 0.5 ** (k + 1)
+
+
+def check_lower_depths(vb, n: int, per_depth: int, rng) -> list[float]:
+    """Solve rate on fresh scrambles of length n-1, n-2, ..., 1 (each within its own length)."""
+    vb.net.eval()
+    rates = []
+    for L in range(n - 1, 0, -1):
+        states = C.scramble(per_depth, L, rng)[0]
+        paths = vb.solve_batch(states, max_steps=L)
+        rates.append(float(np.mean([p is not None for p in paths])))
+    return rates
+
+
 def path_examples(start_states: np.ndarray, paths):
     """States along each found path, with move taken and moves remaining."""
     S, M, R = [], [], []
@@ -252,9 +277,11 @@ def train(cfg: SelfTrainConfig):
             sel = lengths == L
             states[sel] = C.scramble(int(sel.sum()), int(L), rng)[0]
         net.eval()
-        paths = vb.solve_batch(states, max_steps=n, collect=cfg.collect_per_round)
-        bbuf.add(torch.tensor(states.astype(np.uint8), device=dev))   # includes unsolved cubes
-        bbuf.add(vb.collected)
+        use_b = cfg.bellman_weight > 0
+        paths = vb.solve_batch(states, max_steps=n, collect=cfg.collect_per_round if use_b else 0)
+        if use_b:
+            bbuf.add(torch.tensor(states.astype(np.uint8), device=dev))   # includes unsolved cubes
+            bbuf.add(vb.collected)
         net.train()
         solved = np.array([p is not None for p in paths])
         at_n = lengths == n
@@ -279,11 +306,14 @@ def train(cfg: SelfTrainConfig):
                     mask = F.one_hot(m, C.N_MOVES).bool()
                     s, mask = aug(s, mask, g)
                     m = mask.float().argmax(1)
-                # self-consistency targets on searched / unsolved cubes
-                bs = bbuf.sample(cfg.batch, g)
-                if aug is not None:
-                    bs, _ = aug(bs, torch.zeros((len(bs), C.N_MOVES), dtype=torch.bool, device=dev), g)
-                yb = bellman_targets(frozen, enc, perms, solved_t, bs)
+                if cfg.bellman_weight > 0:
+                    # self-consistency targets on searched / unsolved cubes
+                    bs = bbuf.sample(cfg.batch, g)
+                    if aug is not None:
+                        bs, _ = aug(bs, torch.zeros((len(bs), C.N_MOVES), dtype=torch.bool, device=dev), g)
+                    yb = bellman_targets(frozen, enc, perms, solved_t, bs)
+                else:  # path cubes only: no failed or off-path cube is trained
+                    bs = s[:0]
                 # ONE forward pass over both batches, so BatchNorm sees a single consistent mix
                 # (two separate passes gave running statistics that biased evaluation values)
                 with torch.autocast("cuda", dtype=torch.bfloat16):
@@ -291,7 +321,7 @@ def train(cfg: SelfTrainConfig):
                 nb = len(s)
                 lp = F.cross_entropy(logits_all[:nb].float(), m)
                 lv = F.huber_loss(v_all[:nb].float(), r.float())
-                lb = F.huber_loss(v_all[nb:].float(), yb)
+                lb = F.huber_loss(v_all[nb:].float(), yb) if cfg.bellman_weight > 0 else torch.zeros((), device=dev)
                 loss = lp + cfg.value_weight * lv + cfg.bellman_weight * lb
                 opt.zero_grad(set_to_none=True)
                 loss.backward()
@@ -304,7 +334,16 @@ def train(cfg: SelfTrainConfig):
                 losses["loss_p"] += float(lp.detach()) / cfg.train_steps
                 losses["loss_v"] += float(lv.detach()) / cfg.train_steps
 
-        streak = streak + 1 if (rate_n >= cfg.promote_at and value_pass) else 0
+        below = None
+        if cfg.solve_rule == "halving":
+            solve_pass = rate_n >= solve_need(0)
+            if solve_pass and value_pass and n > 1:
+                below = check_lower_depths(vb, n, cfg.check_cubes, rng)
+                solve_pass = all(rate >= solve_need(k) for k, rate in enumerate(below, start=1))
+            net.train()
+        else:
+            solve_pass = rate_n >= cfg.promote_at
+        streak = streak + 1 if (solve_pass and value_pass) else 0
         promoted = False
         if streak >= cfg.promote_rounds and n < cfg.n_max:
             n, streak, promoted = n + 1, 0, True
@@ -313,6 +352,8 @@ def train(cfg: SelfTrainConfig):
                "solve_rate": float(solved.mean()), "solve_rate_at_n": rate_n, "value_ok_at_n": value_ok, "value_scores": group_scores,
                "mean_len": float(lens.mean()) if len(lens) else None,
                "buffer": buf.n, **losses}
+        if below is not None:
+            rec["solve_rates_below"] = below   # depths n-1, n-2, ..., 1
         if rnd % cfg.eval_every == 0 or promoted:
             rec["monitor"] = validate(net, enc, mon, max_dist=12)
             # label quality of this round's new training examples. Only examples whose
@@ -328,7 +369,9 @@ def train(cfg: SelfTrainConfig):
             print(f"round {rnd:5d}  {rec['time']:6.0f}s  n={n:2d}  solved {rec['solve_rate']:.3f} "
                   f"(at n: {rate_n:.3f}, value scores n..n-3: {fmt_scores(group_scores)})  len {rec['mean_len'] or 0:.2f}  buffer {buf.n:,}  "
                   f"loss_p {losses['loss_p']:.3f} loss_v {losses['loss_v']:.3f} loss_b {losses['loss_b']:.3f}"
-                  f"{'  PROMOTED' if promoted else ''}\n"
+                  f"{'  PROMOTED' if promoted else ''}"
+                  + ("\n     solve rates n-1, n-2, ...: " + " ".join(f"{x:.3f}" for x in below) if below else "")
+                  + "\n"
                   f"     exact-label monitor: policy acc {mm['acc']:.3f}  value mae {mm['mae']:.3f}  "
                   f"per distance acc: " + " ".join(f"{k}:{p['acc']:.2f}" for k, p in mm["per_dist"].items())
                   + (f"\n     training targets: move optimal {rec['target_move_optimal']:.3f}, "

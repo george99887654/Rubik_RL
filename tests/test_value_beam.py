@@ -112,3 +112,14 @@ def test_noisy_search_paths_still_valid_and_first_step_unpruned():
     # width 32 >= 18 children: step 1 keeps every child, so every 2-move cube is solved
     for st, p in zip(states, paths):
         assert p is not None and C.is_solved(C.apply_moves(st, p))
+
+
+def test_halving_solve_rule():
+    from rubik_rl.train.self_train import check_lower_depths, solve_need
+
+    assert [solve_need(k) for k in range(4)] == [0.5, 0.75, 0.875, 0.9375]
+    torch.manual_seed(5)
+    net = CubeNet(CubeNetConfig(stem_dim=64, width=32, n_blocks=1)).to(dev)
+    rates = check_lower_depths(ValueBeam(net, width=32), 3, 64, np.random.default_rng(0))
+    # depths 2 and 1: width 32 >= 18 keeps every child at step 1, so both are always solved
+    assert rates == [1.0, 1.0]

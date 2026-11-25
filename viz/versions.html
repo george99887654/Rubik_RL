@@ -63,7 +63,7 @@
 <body>
 <div class="wrap">
   <h1>Rubik RL: model versions</h1>
-  <p class="sub">Every trained model: its training scheme, the features it uses, and its results. Lengths are in HTM moves. Last updated 2026-11-24 (after r3.9.0 finished).</p>
+  <p class="sub">Every trained model: its training scheme, the features it uses, and its results. Lengths are in HTM moves. Last updated 2026-11-24 (after r3.11.0 finished).</p>
 
   <div class="card">
     <strong>Version labels: <span class="label">rMAJOR.MINOR.PATCH</span></strong>
@@ -246,6 +246,29 @@ const V = [
             "Monitor 83.9% (best), value error 0.440",
             "Value beam 1024: depth_14 100% solved, 15.44 moves; <b>random cubes 92% solved, 20.17 moves (best so far)</b>",
             "Lesson: width lifts the solve rate once, then it stays flat; training only on successful paths doesn't fix the cubes that fail"] },
+  { label: "r3.10.0", run: "self_v12", kind: "minor", labels: "Own search (no exact labels)",
+    features: ["halving solve rule: n 50% · n−1 75% · n−2 87.5% · …", "beam width 128", "fixed ±0.3 noise", "from r3.9.0"],
+    training: "180 min; n = 14 at 6.7 min, then stuck below 50%",
+    acc: 84.1, acc12: 37, d12: "100% · 12.00", rnd: "99.5% · 20.28", rndLen: 20.28, rndRate: 99.5,
+    title: "Halving solve rule; first to reach n = 14",
+    meta: "Depths below n are checked on 1,024 extra scrambles each, only when depth n and the value check pass",
+    notes: ["<b>n = 14 at 6.7 min</b> (n = 13 solve rate 0.67 already cleared 50%)",
+            "Solve rate at n = 14: 0.41 → 0.45 over 170 min (need 0.50); value groups passed throughout",
+            "Value head drifted upward on off-path cubes: bias at d = 9 went +0.76 → +1.25, value error 0.44 → 0.67; path targets stayed exact",
+            "Monitor policy accuracy 84.1% (best)",
+            "Value beam 1024, 200 random cubes: <b>99.5% solved, 20.28 moves</b> (r3.9.0 on the same 200: 96.0%, 20.47); depth_14 100%, 15.60"] },
+  { label: "r3.11.0", run: "self_v13", kind: "minor", labels: "Own search (no exact labels)",
+    features: ["value trained on solved-path cubes only (no self-consistency)", "from scratch", "halving solve rule", "beam width 128", "fixed ±0.3 noise"],
+    training: "180 min; n = 10 at 76.8 min, n = 11 at 158 min",
+    acc: 74.9, acc12: 26, d12: "100% · 12.42", rnd: "75.5% · 23.13", rndLen: 23.13, rndRate: 75.5,
+    title: "Path-only value, from scratch",
+    meta: "No failed or off-path cube is trained; value target = moves remaining on a path within the scramble length",
+    notes: ["Solve rate was never the gate (0.80–0.97 at each n); the ≤ n−3 value group (0.945–0.949, need 0.95) held n = 9 and n = 10 for about 50 and 80 min",
+            "Value bias: deep cubes look near (d = 12: −2.05), distances 6–8 too high (+0.4 to +0.56); the upward drift of r3.10.0 is gone",
+            "Monitor policy accuracy 74.9%, value error 0.65",
+            "Value beam 1024: depth_12 92% optimal (12.42); depth_14 86% solved; random cubes (200) 75.5% solved, 23.13 moves",
+            "Continued 180 min from n = 11 (self_v13b): n = 12 at 127.5 min; ≤ n−3 group still 0.934–0.947",
+            "After 6 h: monitor 77.2%, value error 0.55; value beam 1024: depth_12 96% optimal (12.28), depth_14 92% solved (17.39), random cubes (200) 87.5% solved, 22.05 moves"] },
 ];
 
 const $ = (id) => document.getElementById(id);

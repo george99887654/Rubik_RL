@@ -19,6 +19,8 @@ training-scheme change, PATCH a bug fix. Overview page: `viz/versions.html`.
 | r3.7.0 | self_v9 | width 32, ±10% proportional ranking noise |
 | r3.8.0 | self_v10 | width 32, fixed ±0.3 ranking noise |
 | r3.9.0 | self_v11 | width 128 |
+| r3.10.0 | self_v12 | halving solve rule (n 50%, n−1 75%, n−2 87.5%, …) |
+| r3.11.0 | self_v13 | value on solved-path cubes only (no self-consistency), from scratch |
 
 All models were trained on `data/exact_L12`: 2 M cubes within 12 moves, exactly labelled,
 about 20.8 k per distance. Settings: "any correct move counts" policy loss, natural batches,
@@ -165,3 +167,42 @@ Every run from here starts from the previous run's weights; the buffers start em
 Lesson: a wider beam lifts the solve rate once, then it stays flat at each n. Each step up in
 n costs about 0.22 in solve rate. Training only on successful paths doesn't improve the cubes
 that fail, because they never produce a training example.
+
+## r3.10.0 (self_v12): halving solve rule
+
+Promotion needs a solve rate of at least 1 − 0.5^(k+1) at every depth n − k: n 50%, n−1 75%,
+n−2 87.5%, n−3 93.75%, and so on, plus the unchanged value rule, for 3 rounds in a row.
+Training scrambles are all at length n, so the lower depths are checked on 1,024 extra
+scrambles each. Those are used only for measurement, and only in rounds where depth n and the
+value check already pass. Continued from r3.9.0 with width 128 and ±0.3 noise.
+
+- **n = 14 at 6.7 min.** At n = 13 the solve rate (0.67) already cleared 50%, and n−1 was
+  0.90. At n = 14 the solve rate was 0.41 and rose to 0.45 by 180 min, still short of 0.50.
+- **Value drift:** the value head drifted upward on cubes off the solved paths. Mean V − d at
+  d = 9 went from +0.76 (r3.9.0) to +1.25; held-out value error rose from 0.44 to 0.67.
+  - Path targets stayed exact: every checked target with 12 or fewer moves remaining had an
+    exact value and an optimal move.
+  - So the drift comes from the self-consistency targets on off-path and failed cubes, which
+    are anchored only at the solved state.
+- **Results:** held-out policy accuracy 84.1%, the best so far. Value beam 1024 on 200 random
+  cubes: **99.5% solved at 20.28 moves**, against 96.0% at 20.47 for r3.9.0 on the same 200.
+  depth_14: 100% solved at 15.60.
+
+## r3.11.0 (self_v13): path-only value, from scratch
+
+The value head is trained only on cubes along paths solved within the scramble length, with
+target = moves remaining on that path (`--bellman-weight 0`). No failed or off-path cube is
+trained. Otherwise as r3.10.0 (width 128, ±0.3 noise, halving solve rule), but from scratch.
+
+- **Curriculum:** n = 9 at 27.7 min, n = 10 at 76.8 min, n = 11 at 158 min (r3.5.0 at width
+  15 with self-consistency: n = 11 at 56 min).
+  - The solve rate was never the gate (0.80–0.97).
+  - The ≤ n−3 value group was: 0.945–0.949 against 0.95 needed.
+- **Value bias (V − d):** deep cubes look near (d = 10: −0.49, d = 12: −2.05); distances 6–8
+  are too high (+0.38 to +0.56). The upward drift of r3.10.0 is gone.
+- **Results:** monitor 74.9%, value error 0.65. Value beam 1024: depth_12 92% optimal (12.42);
+  depth_14 86% solved at 18.56; random (200 cubes) 75.5% solved at 23.13 moves.
+- **Continued (self_v13b):** 180 more minutes from n = 11. n = 12 at 127.5 min; the ≤ n−3
+  group stayed at 0.934–0.947, and promoted only on a lucky streak. After 6 h in total:
+  monitor 77.2%, value error 0.55; value beam 1024: depth_12 96% optimal (12.28), depth_14
+  92% solved (17.39), random (200 cubes) 87.5% solved at 22.05 moves.
